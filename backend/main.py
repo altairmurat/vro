@@ -14,7 +14,7 @@ from model import models
 from env import API_FRONT
 
 app = FastAPI()
-app.mount("/frontend", StaticFiles(directory="../frontend"), name="frontend")
+app.mount("/frontend", StaticFiles(directory="frontend"), name="frontend")
 
 UPLOAD_DIR = tempfile.mkdtemp()
 from router_raschet import router as raschet_router, set_upload_dir
