@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Matching Table</title>
+</head>
+<body>
+
+<h2>Data Matching Table</h2>
+
+<table border="1" id="data-table">
+    <thead>
+        <tr>
+            <th>Marka</th>
+            <th>Class</th>
+            <th>Thickness</th>
+            <th>Beton</th>
+            <th>Stal</th>
+            <th>Coef</th>
+            <th>Confidence</th>
+            <th>Assigned Title</th>
+        </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<br>
+<button onclick="submitData()">Submit</button>
+
+<script>
+let titles = [];
+
+fetch("http://localhost:8000/data")
+    .then(res => res.json())
+    .then(data => {
+        titles = data.titles;
+
+        const tbody = document.querySelector("#data-table tbody");
+
+        data.rows.forEach(row => {
+            let tr = document.createElement("tr");
+
+            // 🔴 Подсветка
+            if (row.confidence < 0.5) {
+                tr.style.backgroundColor = "#ffcccc"; // красный
+            } else if (row.confidence < 0.8) {
+                tr.style.backgroundColor = "#fff3cd"; // желтый
+            }
+
+            tr.innerHTML = `
+                <td>${row.marka}</td>
+                <td>${row.class}</td>
+                <td>
+                <input type="number" value="${row.thickness}" data-id="${row.db_id}" class="thickness-input">
+                </td>
+                <td>${row.beton}</td>
+                <td>${row.stal}</td>
+                <td>${row.coef}</td>
+                <td>${(row.confidence * 100).toFixed(0)}%</td>
+                <td>
+                    <select data-id="${row.db_id}">
+                        ${titles.map(t =>
+                            `<option value="${t}" ${t === row.assigned_punkt ? "selected" : ""}>${t}</option>`
+                        ).join("")}
+                    </select>
+                </td>
+            `;
+
+            tbody.appendChild(tr);
+        });
+    });
+
+
+function submitData() {
+    const selects = document.querySelectorAll("select");
+    const thicknessInputs = document.querySelectorAll(".thickness-input");
+
+    let result = [];
+
+    selects.forEach(sel => {
+    const thicknessInput = document.querySelector(`.thickness-input[data-id='${sel.dataset.id}']`);
+
+    result.push({
+        db_id: parseInt(sel.dataset.id),
+        punkt: sel.value,
+        thickness: parseInt(thicknessInput.value)
+    });
+});
+
+    fetch("http://localhost:8000/submit", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify(result)
+    })
+    .then(res => res.json())
+    .then(() => {
+        window.location.href = "/aggregation.html";
+    });
+}
+</script>
+
+</body>
+</html>

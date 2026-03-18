@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Сопоставление ССР</title>
+<link rel="stylesheet" href="/frontend/style.css">
+<style>
+body { overflow: auto; }
+
+.ssr-layout { display: flex; flex-direction: column; min-height: 100vh; }
+
+.ssr-main {
+  max-width: 1200px; width: 100%;
+  margin: 0 auto; padding: 2rem 1.5rem 5rem;
+  flex: 1;
+}
+
+/* ── Stats ───────────────────────────────────────────── */
+.stats-bar {
+  display: flex; gap: 12px;
+  margin-bottom: 1.5rem; flex-wrap: wrap;
+}
+.stat-pill {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 14px; border-radius: 8px;
+  font-size: 13px; font-weight: 500;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.stat-pill .stat-val { font-weight: 700; font-size: 15px; }
+.stat-pill.s-total    { border-color: var(--blue-bg); }
+.stat-pill.s-total    .stat-val { color: var(--blue-txt); }
+.stat-pill.s-matched  { border-color: var(--green-bg); }
+.stat-pill.s-matched  .stat-val { color: var(--green-txt); }
+.stat-pill.s-bad      { border-color: var(--red-bg); }
+.stat-pill.s-bad      .stat-val { color: var(--red-txt); }
+.stat-pill.s-edited   { border-color: var(--amber-bg); margin-left: auto; }
+.stat-pill.s-edited   .stat-val { color: var(--amber-txt); }
+
+/* ── Filters ─────────────────────────────────────────── */
+.filters-row {
+  display: flex; gap: 10px;
+  margin-bottom: 1.25rem; flex-wrap: wrap; align-items: center;
+}
+.filter-input {
+  flex: 1; min-width: 200px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; color: var(--txt); font-size: 13px;
+  padding: 8px 12px 8px 32px; outline: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23999993' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: 10px center;
+  transition: border-color .15s;
+}
+.filter-input:focus { border-color: var(--blue-txt); }
+.filter-input::placeholder { color: var(--txt-3); }
+
+.filter-select {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; color: var(--txt); font-size: 13px;
+  padding: 8px 12px; outline: none; cursor: pointer;
+  transition: border-color .15s;
+}
+.filter-select:focus { border-color: var(--blue-txt); }
+
+/* ── Table ───────────────────────────────────────────── */
+.match-table-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.match-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.match-table thead th {
+  background: var(--bg);
+  border-bottom: 2px solid var(--border);
+  padding: 10px 14px;
+  text-align: left;
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .07em;
+  color: var(--txt-2); white-space: nowrap;
+  position: sticky; top: 0; z-index: 2;
+}
+
+.match-table tbody tr {
+  border-bottom: 1px solid var(--border);
+  transition: background .1s;
+}
+.match-table tbody tr:last-child { border-bottom: none; }
+.match-table tbody tr:hover { background: var(--bg); }
+.match-table tbody td { padding: 10px 14px; vertical-align: middle; }
+
+/* Left border status indicator */
+.match-table tbody tr.row-match    td:first-child { border-left: 3px solid var(--green-txt); }
+.match-table tbody tr.row-no-match td:first-child { border-left: 3px solid var(--red-txt); }
+.match-table tbody tr.row-edited   td:first-child { border-left: 3px solid var(--amber-txt); }
+
+.elem-name { font-weight: 500; color: var(--txt); max-width: 260px; }
+.elem-meta { font-size: 11px; color: var(--txt-3); margin-top: 3px; }
+
+/* Confidence badge */
+.conf-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 9px; border-radius: 20px;
+  font-size: 11px; font-weight: 600; white-space: nowrap;
+}
+.conf-high   { background: var(--green-bg); color: var(--green-txt); }
+.conf-medium { background: var(--amber-bg); color: var(--amber-txt); }
+.conf-low    { background: var(--red-bg);   color: var(--red-txt); }
+
+/* CCP dropdown */
+.ccp-select {
+  width: 100%; min-width: 220px;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 7px; color: var(--txt); font-size: 12px;
+  padding: 6px 28px 6px 10px; outline: none; cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23999993' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 8px center;
+  transition: border-color .15s;
+}
+.ccp-select:focus { border-color: var(--blue-txt); }
+.ccp-select.changed { border-color: var(--amber-txt); background-color: var(--amber-bg); }
+
+/* ── Action bar ──────────────────────────────────────── */
+.action-bar {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: var(--surface); border-top: 1px solid var(--border);
+  padding: 14px 2rem;
+  display: flex; align-items: center;
+  justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  z-index: 50;
+  box-shadow: 0 -4px 16px rgba(0,0,0,.06);
+}
+.action-label { font-size: 13px; color: var(--txt-2); }
+
+.btn-submit {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: var(--accent); color: var(--surface);
+  border: none; border-radius: var(--radius);
+  padding: 10px 20px; font-size: 14px; font-weight: 500;
+  cursor: pointer; transition: opacity .15s, transform .1s; white-space: nowrap;
+}
+.btn-submit:hover:not(:disabled) { opacity: .82; }
+.btn-submit:active:not(:disabled) { transform: scale(.97); }
+.btn-submit:disabled { opacity: .35; cursor: not-allowed; }
+
+.btn-next-ssr {
+  display: none; align-items: center; gap: 7px;
+  background: var(--green-txt); color: #fff;
+  border: none; border-radius: var(--radius);
+  padding: 10px 20px; font-size: 14px; font-weight: 500;
+  cursor: pointer; white-space: nowrap; transition: opacity .15s;
+  animation: btn-pop .35s cubic-bezier(.34,1.56,.64,1) both;
+}
+.btn-next-ssr:hover { opacity: .88; }
+
+@keyframes btn-pop {
+  from { opacity: 0; transform: scale(.85) translateY(4px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.action-btns { display: flex; gap: 10px; align-items: center; }
+
+/* ── States ──────────────────────────────────────────── */
+.state-center {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 14px; padding: 4rem 0;
+  color: var(--txt-2); font-size: 14px;
+}
+
+/* ── Toast ───────────────────────────────────────────── */
+#toast {
+  position: fixed; bottom: 80px; right: 24px;
+  padding: 10px 18px; border-radius: 8px;
+  font-size: 13px; font-weight: 500; color: #fff;
+  z-index: 200; transform: translateY(12px); opacity: 0;
+  transition: all .25s; pointer-events: none;
+}
+#toast.show { transform: translateY(0); opacity: 1; }
+#toast.ok  { background: #166534; border: 1px solid #22c55e33; }
+#toast.err { background: #7f1d1d; border: 1px solid #ef444433; }
+
+@media (prefers-color-scheme: dark) {
+  .btn-next-ssr { color: #0d2e12; }
+}
+</style>
+</head>
+<body>
+
+<div class="ssr-layout">
+
+  <header class="header">
+    <div class="header-inner">
+      <span class="logo">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/>
+          <line x1="16" y1="17" x2="8" y2="17"/>
+          <polyline points="10 9 9 9 8 9"/>
+        </svg>
+        Document Processor
+      </span>
+    </div>
+  </header>
+
+  <main class="ssr-main">
+
+    <div class="page-head">
+      <a href="/frontend/raschet.html" class="back-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+        Назад
+      </a>
+      <h1>Сопоставление ССР</h1>
+      <p class="page-desc">
+        Каждый элемент автоматически сопоставлен с пунктом ССР по марке, классу бетона и толщине.
+        Проверьте результат и при необходимости измените вручную через дропдаун.
+      </p>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-bar" id="stats-bar" style="display:none">
+      <div class="stat-pill s-total">
+        <span>Всего</span>
+        <span class="stat-val" id="stat-total">—</span>
+      </div>
+      <div class="stat-pill s-matched">
+        <span>Совпали</span>
+        <span class="stat-val" id="stat-matched">—</span>
+      </div>
+      <div class="stat-pill s-bad">
+        <span>Не совпали</span>
+        <span class="stat-val" id="stat-unmatched">—</span>
+      </div>
+      <div class="stat-pill s-edited">
+        <span>Изменено вручную</span>
+        <span class="stat-val" id="stat-edited">—</span>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters-row" id="filters-row" style="display:none">
+      <input class="filter-input" type="text" id="filter-search"
+             placeholder="Поиск по марке элемента…" oninput="applyFilters()">
+      <select class="filter-select" id="filter-status" onchange="applyFilters()">
+        <option value="all">Все строки</option>
+        <option value="matched">Совпавшие (≥50%)</option>
+        <option value="unmatched">Несовпавшие (&lt;50%)</option>
+        <option value="edited">Изменённые вручную</option>
+      </select>
+    </div>
+
+    <!-- Table -->
+    <div id="table-container">
+      <div class="state-center" id="loading-state">
+        <div class="spinner"></div>
+        <span>Загрузка и сопоставление данных…</span>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Action bar -->
+  <div class="action-bar" id="action-bar" style="display:none">
+    <div class="action-label" id="action-label">Проверьте сопоставления и нажмите «Сохранить»</div>
+    <div class="action-btns">
+      <button class="btn-submit" id="btn-submit" onclick="submitAll()" disabled>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+          <polyline points="17 21 17 13 7 13 7 21"/>
+          <polyline points="7 3 7 8 15 8"/>
+        </svg>
+        Сохранить
+      </button>
+      <button class="btn-next-ssr" id="btn-next-ssr" onclick="goNext()">
+        Идти дальше
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── State ─────────────────────────────────────────────
+let allRows   = [];
+let titles    = [];
+let editedIds = new Set();
+
+// ── Init ──────────────────────────────────────────────
+(async function init() {
+  try {
+    const res = await fetch('/api/ssr/match');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    allRows = data.rows   || [];
+    titles  = data.titles || [];
+
+    if (!allRows.length) {
+      document.getElementById('loading-state').innerHTML =
+        '<span style="color:var(--txt-3)">Нет данных для сопоставления. Сначала загрузите PDF.</span>';
+      return;
+    }
+
+    document.getElementById('loading-state').style.display = 'none';
+    document.getElementById('stats-bar').style.display     = 'flex';
+    document.getElementById('filters-row').style.display   = 'flex';
+    document.getElementById('action-bar').style.display    = 'flex';
+    document.getElementById('btn-submit').disabled         = false;
+
+    renderTable(allRows);
+    updateStats();
+    updateActionLabel();
+
+  } catch (err) {
+    document.getElementById('loading-state').innerHTML =
+      `<span style="color:var(--red-txt)">Ошибка загрузки: ${esc(String(err.message))}</span>`;
+  }
+})();
+
+// ── Render table ──────────────────────────────────────
+function renderTable(rows) {
+  const container = document.getElementById('table-container');
+
+  if (!rows.length) {
+    container.innerHTML =
+      '<div class="state-center"><span style="color:var(--txt-3)">Нет строк по фильтру</span></div>';
+    return;
+  }
+
+  let html = `
+    <div class="match-table-wrap">
+      <table class="match-table">
+        <thead>
+          <tr>
+            <th style="width:42px">#</th>
+            <th>Марка элемента</th>
+            <th>Класс бетона</th>
+            <th>Толщина</th>
+            <th>Точность</th>
+            <th>Пункт ССР</th>
+          </tr>
+        </thead>
+        <tbody>`;
+
+  rows.forEach((row, i) => {
+    const conf      = row.confidence || 0;
+    const confPct   = Math.round(conf * 100);
+    const confCls   = conf >= 0.8 ? 'conf-high' : conf >= 0.5 ? 'conf-medium' : 'conf-low';
+    const confIcon  = conf >= 0.8 ? '✓' : conf >= 0.5 ? '~' : '?';
+    const isEdited  = editedIds.has(row.db_id);
+    const rowCls    = isEdited ? 'row-edited' : (row.is_match ? 'row-match' : 'row-no-match');
+    const selCls    = isEdited ? 'changed' : '';
+
+    // Build <option> list
+    const emptyOpt = row.assigned_punkt
+      ? ''
+      : `<option value="" selected disabled>— выберите пункт ССР —</option>`;
+
+    const opts = titles.map(t => {
+      const val = String(t);
+      const sel = val === row.assigned_punkt ? 'selected' : '';
+      return `<option value="${esc(val)}" ${sel}>${esc(val)}</option>`;
+    }).join('');
+
+    html += `
+      <tr class="${rowCls}" data-id="${row.db_id}">
+        <td style="color:var(--txt-3);font-size:11px;text-align:center">${i + 1}</td>
+        <td>
+          <div class="elem-name">${esc(row.marka || '—')}</div>
+          <div class="elem-meta">
+            бетон: ${esc(row.beton != null ? row.beton + ' м³' : '—')} &nbsp;·&nbsp;
+            сталь: ${esc(row.stal  != null ? row.stal  + ' кг' : '—')}
+          </div>
+        </td>
+        <td style="font-size:12px;color:var(--txt-2)">${esc(row.class || '—')}</td>
+        <td style="font-size:12px;color:var(--txt-2)">${esc(row.thickness != null ? row.thickness + ' мм' : '—')}</td>
+        <td>
+          <span class="conf-badge ${confCls}">${confIcon} ${confPct}%</span>
+        </td>
+        <td>
+          <select class="ccp-select ${selCls}"
+                  data-id="${row.db_id}"
+                  onchange="onSelectChange(this, ${row.db_id})">
+            ${emptyOpt}${opts}
+          </select>
+        </td>
+      </tr>`;
+  });
+
+  html += '</tbody></table></div>';
+  container.innerHTML = html;
+}
+
+// ── Select change ─────────────────────────────────────
+function onSelectChange(sel, id) {
+  editedIds.add(id);
+  sel.classList.add('changed');
+
+  // Update row class
+  const tr = sel.closest('tr');
+  tr.className = 'row-edited';
+
+  // Sync allRows
+  const row = allRows.find(r => r.db_id === id);
+  if (row) {
+    row.assigned_punkt = sel.value;
+    row.is_match       = true; // user explicitly set it
+  }
+
+  updateStats();
+  updateActionLabel();
+}
+
+// ── Filters ───────────────────────────────────────────
+function applyFilters() {
+  const q      = document.getElementById('filter-search').value.toLowerCase();
+  const status = document.getElementById('filter-status').value;
+
+  const filtered = allRows.filter(row => {
+    const nameOk = !q || (row.marka || '').toLowerCase().includes(q);
+    let   stOk   = true;
+    if (status === 'matched')   stOk =  row.is_match && !editedIds.has(row.db_id);
+    if (status === 'unmatched') stOk = !row.is_match && !editedIds.has(row.db_id);
+    if (status === 'edited')    stOk =  editedIds.has(row.db_id);
+    return nameOk && stOk;
+  });
+
+  renderTable(filtered);
+}
+
+// ── Stats ─────────────────────────────────────────────
+function updateStats() {
+  const total     = allRows.length;
+  const matched   = allRows.filter(r => r.is_match || editedIds.has(r.db_id)).length;
+  const unmatched = total - matched;
+
+  document.getElementById('stat-total').textContent     = total;
+  document.getElementById('stat-matched').textContent   = matched;
+  document.getElementById('stat-unmatched').textContent = unmatched;
+  document.getElementById('stat-edited').textContent    = editedIds.size;
+}
+
+function updateActionLabel() {
+  const unmatched = allRows.filter(r => !r.assigned_punkt).length;
+  const lbl = document.getElementById('action-label');
+  lbl.innerHTML = unmatched > 0
+    ? `<span style="color:var(--amber-txt)">⚠ ${unmatched} элементов без пункта ССР</span>`
+    : `<span style="color:var(--green-txt)">✓ Все элементы сопоставлены</span>`;
+}
+
+// ── Submit ────────────────────────────────────────────
+async function submitAll() {
+  const btn = document.getElementById('btn-submit');
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spinner" style="width:14px;height:14px;margin-right:6px;border-width:2px;"></span> Сохранение…`;
+
+  const payload = allRows
+    .filter(r => r.assigned_punkt)
+    .map(r => ({
+      db_id:     r.db_id,
+      punkt:     r.assigned_punkt,
+      thickness: r.thickness != null ? String(r.thickness) : null, // only send if exists
+    }));
+
+  if (!payload.length) {
+    toast('Нет сопоставлений для сохранения', 'err');
+    resetSubmitBtn();
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/ssr/submit', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    toast(`Сохранено ${data.saved} сопоставлений`, 'ok');
+
+    btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Сохранено`;
+
+    // Show next btn
+    const nextBtn = document.getElementById('btn-next-ssr');
+    nextBtn.style.display = 'none';
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      nextBtn.style.display = 'inline-flex';
+    }));
+
+  } catch (err) {
+    toast(`Ошибка: ${err.message}`, 'err');
+    resetSubmitBtn();
+  }
+}
+
+function resetSubmitBtn() {
+  const btn = document.getElementById('btn-submit');
+  btn.disabled = false;
+  btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Сохранить`;
+}
+
+function goNext() {
+  // Замените на следующую страницу вашего пайплайна
+  window.location.href = '/frontend/aggregation.html';
+}
+
+// ── Helpers ───────────────────────────────────────────
+function toast(msg, type = 'ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `show ${type}`;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.className = ''; }, 3200);
+}
+
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    e.preventDefault();
+    submitAll();
+  }
+});
+</script>
+</body>
+</html>

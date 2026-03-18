@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Агрегация данных — processed_data</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #f5f4f1;
+  --surface:   #ffffff;
+  --border:    rgba(0,0,0,.10);
+  --border-md: rgba(0,0,0,.15);
+  --txt:       #1a1a18;
+  --txt-2:     #666660;
+  --txt-3:     #999993;
+  --accent:    #1a1a18;
+  --blue-bg:   #e8f0fb;
+  --blue-txt:  #1a4fa0;
+  --green-bg:  #e4f3e4;
+  --green-txt: #1f6e2a;
+  --red-bg:    #fce8e8;
+  --red-txt:   #9b1c1c;
+  --amber-bg:  #fef3cd;
+  --amber-txt: #7a4f00;
+  --g1: #1a4fa0; --g2: #1f6e2a; --g3: #c05a00; --g4: #6b21a8;
+  --radius:    10px;
+  --radius-lg: 14px;
+  --shadow:    0 1px 3px rgba(0,0,0,.07), 0 4px 12px rgba(0,0,0,.05);
+  --mono:      'JetBrains Mono', monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:        #141413;
+    --surface:   #1e1e1c;
+    --border:    rgba(255,255,255,.10);
+    --border-md: rgba(255,255,255,.16);
+    --txt:       #e8e8e4;
+    --txt-2:     #999993;
+    --txt-3:     #666660;
+    --accent:    #e8e8e4;
+    --blue-bg:   #0f2040;
+    --blue-txt:  #7eb4f5;
+    --green-bg:  #0d2e12;
+    --green-txt: #6fcf7a;
+    --red-bg:    #2d0e0e;
+    --red-txt:   #f5a0a0;
+    --amber-bg:  #2a1f00;
+    --amber-txt: #f5c842;
+    --g1: #7eb4f5; --g2: #6fcf7a; --g3: #fb923c; --g4: #c084fc;
+    --shadow:    0 1px 3px rgba(0,0,0,.3), 0 4px 12px rgba(0,0,0,.2);
+  }
+}
+
+html { font-size: 16px; }
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--txt);
+  min-height: 100vh;
+  line-height: 1.6;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Header ── */
+.header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 100;
+}
+.header-inner {
+  max-width: 1200px; margin: 0 auto;
+  padding: 0 1.5rem;
+  height: 56px; display: flex; align-items: center; gap: 10px;
+}
+.logo {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 15px; font-weight: 600; color: var(--txt);
+  letter-spacing: -.01em; flex: 1;
+}
+.logo-tag {
+  font-family: var(--mono);
+  font-size: 11px; font-weight: 400;
+  background: var(--blue-bg); color: var(--blue-txt);
+  padding: 2px 8px; border-radius: 5px;
+}
+
+.btn-back {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: none; border: 1px solid var(--border-md);
+  border-radius: 8px; padding: 6px 12px;
+  font-size: 13px; color: var(--txt-2); cursor: pointer;
+  transition: background .12s, color .12s;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+.btn-back:hover { background: var(--bg); color: var(--txt); }
+
+.btn-export {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: var(--green-txt); color: #fff;
+  border: none; border-radius: var(--radius);
+  padding: 7px 14px; font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: opacity .15s, transform .1s;
+  font-family: 'Inter', system-ui, sans-serif;
+  white-space: nowrap;
+}
+.btn-export:hover { opacity: .85; }
+.btn-export:active { transform: scale(.97); }
+
+@media (prefers-color-scheme: dark) {
+  .btn-export { color: #0d2e12; }
+}
+
+/* ── Layout ── */
+.layout {
+  display: flex; flex: 1;
+  max-width: 1200px; margin: 0 auto; width: 100%;
+}
+
+/* ── Sidebar ── */
+.legend-panel {
+  width: 248px; min-width: 220px; flex-shrink: 0;
+  padding: 1.5rem 1rem;
+  position: sticky; top: 56px;
+  height: calc(100vh - 56px);
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  display: flex; flex-direction: column; gap: 4px;
+}
+.legend-panel h2 {
+  font-size: 11px; font-weight: 600;
+  letter-spacing: .06em; text-transform: uppercase;
+  color: var(--txt-3); margin-bottom: 12px; padding: 0 4px;
+}
+.legend-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: var(--radius);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background .12s, border-color .12s;
+  user-select: none;
+}
+.legend-item:hover { background: var(--bg); }
+.legend-item.active { background: var(--bg); border-color: var(--border-md); }
+.legend-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+.legend-text { flex: 1; }
+.legend-text strong { display: block; font-size: 13px; font-weight: 500; color: var(--txt); line-height: 1.3; }
+.legend-text span { font-size: 11px; color: var(--txt-3); }
+.legend-toggle {
+  width: 30px; height: 17px; border-radius: 99px;
+  background: var(--border-md); position: relative;
+  transition: background .2s; flex-shrink: 0;
+}
+.legend-toggle::after {
+  content: ''; position: absolute; left: 2px; top: 2px;
+  width: 13px; height: 13px; border-radius: 99px;
+  background: var(--txt-3); transition: transform .2s, background .2s;
+}
+.legend-item.active .legend-toggle { background: var(--blue-bg); }
+.legend-item.active .legend-toggle::after { transform: translateX(13px); background: var(--blue-txt); }
+.legend-divider { height: 1px; background: var(--border); margin: 8px 4px; }
+.legend-hint { font-size: 11px; color: var(--txt-3); line-height: 1.6; padding: 4px; }
+
+/* ── Tree area ── */
+.tree-area {
+  flex: 1; padding: 1.75rem 1.5rem 3rem;
+  overflow-y: auto; min-width: 0;
+}
+.tree-head { margin-bottom: 1.5rem; }
+.tree-head h1 { font-size: 20px; font-weight: 600; letter-spacing: -.02em; color: var(--txt); }
+.tree-head p { font-size: 13px; color: var(--txt-2); margin-top: 2px; }
+
+/* loading / error */
+.loading-state {
+  display: flex; align-items: center; gap: 10px;
+  color: var(--txt-2); font-size: 14px; padding: 2.5rem 0;
+}
+.spinner {
+  display: inline-block; width: 18px; height: 18px;
+  border: 2px solid var(--border-md);
+  border-top-color: var(--blue-txt);
+  border-radius: 50%; animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.empty-msg { color: var(--txt-3); font-size: 14px; padding: 2rem 0; font-style: italic; }
+.error-msg { color: var(--red-txt); background: var(--red-bg); border-radius: var(--radius); padding: 12px 16px; font-size: 13px; }
+
+/* ── Level 1 ── */
+.group-block {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  margin-bottom: 1rem; overflow: hidden;
+}
+.group-block.hidden { display: none; }
+.group-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 18px; cursor: pointer;
+  transition: background .12s;
+  border-left: 3px solid transparent;
+}
+.group-header:hover { background: var(--bg); }
+.gl-1 { border-left-color: var(--g1); }
+.gl-2 { border-left-color: var(--g2); }
+.gl-3 { border-left-color: var(--g3); }
+.group-index {
+  font-size: 11px; font-weight: 700;
+  padding: 2px 8px; border-radius: 5px;
+  flex-shrink: 0; font-family: var(--mono);
+}
+.gi-1 { background: var(--blue-bg);  color: var(--blue-txt); }
+.gi-2 { background: var(--green-bg); color: var(--green-txt); }
+.gi-3 { background: var(--amber-bg); color: var(--amber-txt); }
+.group-title { flex: 1; font-size: 14px; font-weight: 500; color: var(--txt); }
+.toggle-arrow { color: var(--txt-3); font-size: 11px; transition: transform .2s; }
+.group-block.collapsed .toggle-arrow { transform: rotate(-90deg); }
+.group-body {
+  padding: 12px 16px 16px;
+  display: flex; flex-direction: column; gap: 8px;
+  border-top: 1px solid var(--border);
+}
+.group-block.collapsed .group-body { display: none; }
+.empty-group { color: var(--txt-3); font-size: 13px; font-style: italic; padding: 6px 2px; }
+
+/* ── Level 2 ── */
+.sub-block { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.sub-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 14px; background: var(--bg); cursor: pointer; transition: filter .12s;
+}
+.sub-header:hover { filter: brightness(.96); }
+@media (prefers-color-scheme: dark) { .sub-header:hover { filter: brightness(1.12); } }
+.sub-index { font-size: 11px; color: var(--txt-3); min-width: 36px; font-family: var(--mono); }
+.sub-label { flex: 1; font-size: 13px; color: var(--txt); }
+.sub-meta {
+  font-size: 11px; color: var(--txt-3);
+  background: var(--surface); border: 1px solid var(--border);
+  padding: 1px 7px; border-radius: 5px;
+}
+.sub-body { padding: 8px 14px 12px; display: flex; flex-direction: column; }
+.sub-block.collapsed .sub-body { display: none; }
+
+/* ── Level 3 ── */
+.op-row {
+  display: flex; align-items: center;
+  padding: 5px 0; border-bottom: 1px solid var(--border);
+}
+.op-row:last-child { border-bottom: none; }
+.op-indent { width: 24px; flex-shrink: 0; color: var(--txt-3); font-size: 12px; }
+.op-index  { width: 54px; flex-shrink: 0; font-size: 11px; color: var(--txt-3); font-family: var(--mono); }
+.op-label  { flex: 1; font-size: 13px; color: var(--txt-2); }
+.op-value  { font-size: 12px; font-weight: 500; color: var(--blue-txt); min-width: 90px; text-align: right; font-family: var(--mono); }
+
+/* ── Level 4 ── */
+.sub-op-row { display: flex; align-items: center; padding: 3px 0; }
+.sub-op-indent { width: 40px; flex-shrink: 0; }
+.sub-op-index  { width: 62px; flex-shrink: 0; font-size: 10px; color: var(--txt-3); font-family: var(--mono); }
+.sub-op-label  { flex: 1; font-size: 12px; color: var(--txt-3); }
+.sub-op-value  { font-size: 11px; color: var(--txt-2); min-width: 90px; text-align: right; font-family: var(--mono); }
+
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-md); border-radius: 99px; }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-inner">
+    <button class="btn-back" onclick="history.back()">
+      ← Назад
+    </button>
+    <div class="logo">
+      Агрегация данных
+      <span class="logo-tag">processed_data</span>
+    </div>
+    <button class="btn-export" onclick="exportExcel()">
+      ↓ Экспорт в Excel
+    </button>
+  </div>
+</header>
+
+<div class="layout">
+
+  <aside class="legend-panel">
+    <h2>Отображение групп</h2>
+
+    <div class="legend-item active" data-group="g1" onclick="toggleGroup('g1', this)">
+      <div class="legend-dot" style="background:var(--g1)"></div>
+      <div class="legend-text">
+        <strong>Группа 1</strong>
+        <span>Разделы верхнего уровня</span>
+      </div>
+      <div class="legend-toggle"></div>
+    </div>
+
+    <div class="legend-item active" data-group="g2" onclick="toggleGroup('g2', this)">
+      <div class="legend-dot" style="background:var(--g2)"></div>
+      <div class="legend-text">
+        <strong>Группа 2</strong>
+        <span>Подпункты (ж/б конструкции)</span>
+      </div>
+      <div class="legend-toggle"></div>
+    </div>
+
+    <div class="legend-item active" data-group="g3" onclick="toggleGroup('g3', this)">
+      <div class="legend-dot" style="background:var(--g3)"></div>
+      <div class="legend-text">
+        <strong>Группа 3</strong>
+        <span>Армирование, бетонирование</span>
+      </div>
+      <div class="legend-toggle"></div>
+    </div>
+
+    <div class="legend-divider"></div>
+
+    <div class="legend-item active" data-group="g4" onclick="toggleGroup('g4', this)">
+      <div class="legend-dot" style="background:var(--g4)"></div>
+      <div class="legend-text">
+        <strong>Группа 4</strong>
+        <span>Класс бетона, коэф. арм.</span>
+      </div>
+      <div class="legend-toggle"></div>
+    </div>
+
+    <div class="legend-divider"></div>
+    <p class="legend-hint">Нажмите на пункт, чтобы скрыть или показать соответствующий уровень иерархии.</p>
+  </aside>
+
+  <main class="tree-area">
+    <div class="tree-head">
+      <h1>Сводная ведомость работ</h1>
+      <p>Группировка данных по конструктивным элементам</p>
+    </div>
+    <div id="treeArea">
+      <div class="loading-state">
+        <div class="spinner"></div>
+        Загрузка данных...
+      </div>
+    </div>
+  </main>
+
+</div>
+
+<script>
+const API = '/api/aggregation';
+let state = { g1: true, g2: true, g3: true, g4: true };
+let treeData = null;
+
+function toggleGroup(key, el) {
+  state[key] = !state[key];
+  el.classList.toggle('active', state[key]);
+  applyVisibility();
+}
+
+function applyVisibility() {
+  document.querySelectorAll('.group-block').forEach(b => b.classList.toggle('hidden', !state.g1));
+  document.querySelectorAll('.sub-block').forEach(b => { b.style.display = state.g2 ? '' : 'none'; });
+  document.querySelectorAll('.op-row').forEach(r => { r.style.display = state.g3 ? '' : 'none'; });
+  document.querySelectorAll('.sub-op-row').forEach(r => { r.style.display = state.g4 ? '' : 'none'; });
+}
+
+function buildTree(data) {
+  treeData = data;
+  const area = document.getElementById('treeArea');
+  area.innerHTML = '';
+
+  if (!data.tree || !data.tree.length) {
+    area.innerHTML = '<div class="empty-msg">Данных нет</div>';
+    return;
+  }
+
+  const GI = ['gi-1','gi-2','gi-3'];
+  const GL = ['gl-1','gl-2','gl-3'];
+
+  data.tree.forEach((topNode, gi) => {
+    const block = document.createElement('div');
+    block.className = 'group-block';
+
+    const hdr = document.createElement('div');
+    hdr.className = `group-header ${GL[gi]}`;
+    hdr.innerHTML = `<span class="group-index ${GI[gi]}">${gi+1}</span><span class="group-title">${topNode.label}</span><span class="toggle-arrow">▾</span>`;
+    hdr.onclick = () => block.classList.toggle('collapsed');
+    block.appendChild(hdr);
+
+    const body = document.createElement('div');
+    body.className = 'group-body';
+
+    if (!topNode.children || !topNode.children.length) {
+      body.innerHTML = '<div class="empty-group">— нет данных —</div>';
+    } else {
+      topNode.children.forEach((subNode, si) => {
+        const subBlock = document.createElement('div');
+        subBlock.className = 'sub-block';
+        const idx2 = `${gi+1}.${si+1}`;
+
+        const subHdr = document.createElement('div');
+        subHdr.className = 'sub-header';
+        subHdr.innerHTML = `
+          <span class="sub-index">${idx2}</span>
+          <span class="sub-label">${subNode.label}</span>
+          ${subNode.thickness ? `<span class="sub-meta">t = ${subNode.thickness} мм</span>` : ''}
+          <span class="toggle-arrow" style="margin-left:6px;font-size:10px">▾</span>`;
+        subHdr.onclick = () => subBlock.classList.toggle('collapsed');
+        subBlock.appendChild(subHdr);
+
+        const subBody = document.createElement('div');
+        subBody.className = 'sub-body';
+
+        (subNode.children || []).forEach((op, oi) => {
+          const idx3 = `${idx2}.${oi+1}`;
+          const opRow = document.createElement('div');
+          opRow.className = 'op-row';
+          opRow.innerHTML = `<span class="op-indent">└</span><span class="op-index">${idx3}</span><span class="op-label">${op.label}</span><span class="op-value">${op.value ?? ''}</span>`;
+          subBody.appendChild(opRow);
+
+          (op.children || []).forEach((sop, soi) => {
+            const sopRow = document.createElement('div');
+            sopRow.className = 'sub-op-row';
+            sopRow.innerHTML = `<span class="sub-op-indent"></span><span class="sub-op-index">${idx3}.${soi+1}</span><span class="sub-op-label">${sop.label}</span><span class="sub-op-value">${sop.value ?? ''}</span>`;
+            subBody.appendChild(sopRow);
+          });
+        });
+
+        subBlock.appendChild(subBody);
+        body.appendChild(subBlock);
+      });
+    }
+
+    block.appendChild(body);
+    area.appendChild(block);
+  });
+
+  applyVisibility();
+}
+
+async function exportExcel() {
+  if (!treeData) return;
+
+  if (!window.XLSX) {
+    await new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.onload = res; s.onerror = rej;
+      document.head.appendChild(s);
+    });
+  }
+
+  const rows = [['№', 'Наименование', 'Сталь (кг)', 'Бетон (м³)', 'Класс бетона', 'Коэф. арм. (%)']];
+
+  treeData.tree.forEach((topNode, gi) => {
+    rows.push([`${gi+1}`, topNode.label, '', '', '', '']);
+    (topNode.children || []).forEach((subNode, si) => {
+      let stal = '', beton = '', marka = '', coef = '';
+      (subNode.children || []).forEach(op => {
+        if (op.label === 'Армирование') stal = op.value ?? '';
+        if (op.label === 'Бетонирование') {
+          beton = op.value ?? '';
+          (op.children || []).forEach(sop => {
+            if (sop.label === 'Класс бетона')      marka = sop.value ?? '';
+            if (sop.label === 'Коэф. армирования') coef  = sop.value ?? '';
+          });
+        }
+      });
+      rows.push([`${gi+1}.${si+1}`, subNode.label, stal, beton, marka, coef]);
+    });
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{ wch:8 },{ wch:60 },{ wch:14 },{ wch:14 },{ wch:16 },{ wch:18 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Агрегация');
+  XLSX.writeFile(wb, 'processed_data_aggregation.xlsx');
+}
+
+async function loadData() {
+  try {
+    const res = await fetch(API);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    buildTree(await res.json());
+  } catch (err) {
+    document.getElementById('treeArea').innerHTML =
+      `<div class="error-msg">Ошибка загрузки: ${err.message}</div>`;
+  }
+}
+
+loadData();
+</script>
+</body>
+</html>

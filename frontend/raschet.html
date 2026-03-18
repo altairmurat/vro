@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Расчёт элементов</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+/* ── Reset & Base ─────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #0f1117;
+  --surface:   #171b26;
+  --surface2:  #1e2333;
+  --border:    #2a2f42;
+  --text:      #e2e8f0;
+  --text-dim:  #64748b;
+  --accent:    #3b82f6;
+  --accent-h:  #2563eb;
+  --green:     #22c55e;
+  --red:       #ef4444;
+  --yellow:    #facc15;
+  --radius:    10px;
+  --font:      'IBM Plex Mono', 'Fira Code', 'Courier New', monospace;
+  --font-ui:   'IBM Plex Sans', system-ui, sans-serif;
+  --header-h:  52px;
+}
+
+body {
+  font-family: var(--font-ui);
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Header ──────────────────────────────────────────────── */
+.header {
+  height: var(--header-h);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-dim);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-decoration: none;
+}
+.back-btn:hover { color: var(--text); border-color: var(--accent); }
+
+.page-title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.status-pill {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-weight: 500;
+  display: none;
+}
+.status-pill.saving  { background: rgba(59,130,246,.15); color: var(--accent); display:inline-flex; }
+.status-pill.saved   { background: rgba(34,197,94,.15);  color: var(--green);  display:inline-flex; }
+.status-pill.error   { background: rgba(239,68,68,.15);  color: var(--red);    display:inline-flex; }
+.status-pill.unsaved { background: rgba(250,204,21,.15); color: var(--yellow); display:inline-flex; }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 16px;
+  border: none;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-save {
+  background: var(--accent);
+  color: #fff;
+}
+.btn-save:hover { background: var(--accent-h); }
+.btn-save:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Layout ──────────────────────────────────────────────── */
+.workspace {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  gap: 0;
+}
+
+/* ── PDF Panel ───────────────────────────────────────────── */
+.pdf-panel {
+  width: 48%;
+  min-width: 320px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  resize: horizontal;
+}
+
+.pdf-toolbar {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.pdf-toolbar-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  margin-right: 4px;
+}
+
+.pdf-page-ctrl {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.pdf-page-ctrl button {
+  width: 26px;
+  height: 26px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.1s;
+}
+.pdf-page-ctrl button:hover { background: var(--border); }
+.pdf-page-ctrl button:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.pdf-page-info {
+  font-size: 12px;
+  color: var(--text-dim);
+  min-width: 60px;
+  text-align: center;
+}
+
+.pdf-viewport {
+  flex: 1;
+  overflow: auto;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 16px;
+  background: #1a1a2e;
+}
+
+#pdf-canvas-wrap {
+  position: relative;
+  display: inline-block;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+}
+
+#pdf-canvas {
+  display: block;
+  max-width: 100%;
+}
+
+/* Yellow dot overlay */
+#pdf-overlay {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+}
+
+.highlight-dot {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  background: var(--yellow);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 0 3px rgba(250,204,21,0.3), 0 0 12px rgba(250,204,21,0.6);
+  animation: dot-pulse 1.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes dot-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(250,204,21,0.3), 0 0 12px rgba(250,204,21,0.6); }
+  50%       { box-shadow: 0 0 0 6px rgba(250,204,21,0.1), 0 0 24px rgba(250,204,21,0.8); }
+}
+
+.pdf-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 100%;
+  color: var(--text-dim);
+  font-size: 14px;
+  text-align: center;
+}
+
+.pdf-placeholder svg { opacity: 0.3; }
+
+/* PDF upload area inside panel */
+.pdf-upload-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex: 1;
+  padding: 32px;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  margin: 16px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  color: var(--text-dim);
+  font-size: 13px;
+  text-align: center;
+}
+.pdf-upload-area:hover, .pdf-upload-area.drag-over {
+  border-color: var(--accent);
+  background: rgba(59,130,246,0.04);
+  color: var(--text);
+}
+.pdf-upload-area svg { opacity: 0.4; }
+.pdf-upload-area input { display: none; }
+
+/* ── Table Panel ─────────────────────────────────────────── */
+.table-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.table-toolbar {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  background: var(--surface);
+}
+
+.table-toolbar-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+
+.row-count {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-left: auto;
+  font-family: var(--font);
+}
+
+.table-wrap {
+  flex: 1;
+  overflow: auto;
+}
+
+/* Loading / Error states */
+.state-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 100%;
+  color: var(--text-dim);
+  font-size: 14px;
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Data Table ──────────────────────────────────────────── */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  font-family: var(--font);
+}
+
+thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface2);
+  border-bottom: 2px solid var(--border);
+  padding: 9px 12px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-dim);
+  white-space: nowrap;
+  z-index: 2;
+}
+
+thead th:first-child {
+  width: 42px;
+  text-align: center;
+}
+
+tbody tr {
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s;
+  cursor: pointer;
+}
+
+tbody tr:hover  { background: var(--surface2); }
+tbody tr.active { background: rgba(59,130,246,0.12); }
+tbody tr.dirty  { background: rgba(250,204,21,0.05); }
+
+tbody td {
+  padding: 7px 12px;
+  vertical-align: middle;
+}
+
+tbody td:first-child {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 11px;
+  user-select: none;
+}
+
+/* Inline editable cells */
+td[contenteditable="true"] {
+  outline: none;
+  border-radius: 4px;
+  min-width: 60px;
+}
+
+td[contenteditable="true"]:focus {
+  background: rgba(59,130,246,0.15);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.cell-null {
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+/* ── Search bar ─────────────────────────────────────────── */
+.search-wrap {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+
+.search-input {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 13px;
+  padding: 6px 10px 6px 30px;
+  outline: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 9px center;
+  transition: border-color 0.15s;
+}
+.search-input:focus { border-color: var(--accent); }
+.search-input::placeholder { color: var(--text-dim); }
+
+/* ── Toast ──────────────────────────────────────────────── */
+#toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+  z-index: 100;
+  transform: translateY(12px);
+  opacity: 0;
+  transition: all 0.25s;
+  pointer-events: none;
+}
+#toast.show { transform: translateY(0); opacity: 1; }
+#toast.ok    { background: #166534; border: 1px solid #22c55e33; }
+#toast.err   { background: #7f1d1d; border: 1px solid #ef444433; }
+</style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header class="header">
+  <div class="header-left">
+    <a href="/frontend/index.html" class="back-btn">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="15 18 9 12 15 6"/>
+      </svg>
+      Назад
+    </a>
+    <span class="page-title">Расчёт элементов</span>
+  </div>
+  <div class="header-right">
+    <span class="status-pill" id="status-pill"></span>
+    <button class="btn btn-save" id="btn-save" onclick="saveAll()" disabled>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+        <polyline points="17 21 17 13 7 13 7 21"/>
+        <polyline points="7 3 7 8 15 8"/>
+      </svg>
+      Сохранить
+    </button>
+
+    <button class="btn" id="btn-next"
+            style="display:none; background:#22c55e; color:#fff;"
+            onclick="window.location.href='/frontend/ssopostavlenie.html'">
+        Идти дальше
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="9 18 15 12 9 6"/>
+        </svg>
+    </button>
+  </div>
+</header>
+
+<!-- ── Workspace ── -->
+<div class="workspace">
+
+  <!-- PDF Panel -->
+  <div class="pdf-panel" id="pdf-panel">
+    <div class="pdf-toolbar">
+      <span class="pdf-toolbar-label">PDF</span>
+      <span id="pdf-filename" style="font-size:12px;color:var(--text-dim);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+      <div class="pdf-page-ctrl" id="pdf-page-ctrl" style="display:none">
+        <button id="btn-prev" onclick="changePage(-1)" disabled>‹</button>
+        <span class="pdf-page-info" id="page-info">1 / 1</span>
+        <button id="btn-next-page" onclick="changePage(1)" disabled>›</button>
+      </div>
+    </div>
+
+    <!-- Upload area (shown when no PDF) -->
+    <div class="pdf-upload-area" id="pdf-upload-area"
+         onclick="document.getElementById('pdf-file-input').click()"
+         ondragover="event.preventDefault();this.classList.add('drag-over')"
+         ondragleave="this.classList.remove('drag-over')"
+         ondrop="onPdfDrop(event)">
+      <input type="file" id="pdf-file-input" accept=".pdf" onchange="loadPdfFile(this.files[0])">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="16" y1="13" x2="8" y2="13"/>
+        <line x1="16" y1="17" x2="8" y2="17"/>
+      </svg>
+      <div style="font-weight:600;color:var(--text)">Загрузить PDF</div>
+      <div style="font-size:12px">Перетащите или нажмите для выбора файла</div>
+    </div>
+
+    <!-- Canvas viewport (shown when PDF loaded) -->
+    <div class="pdf-viewport" id="pdf-viewport" style="display:none">
+      <div id="pdf-canvas-wrap">
+        <canvas id="pdf-canvas"></canvas>
+        <div id="pdf-overlay"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Table Panel -->
+  <div class="table-panel">
+    <div class="search-wrap">
+      <input class="search-input" type="text" id="search-input"
+             placeholder="Поиск по марке элемента…"
+             oninput="filterTable(this.value)">
+    </div>
+    <div class="table-toolbar">
+      <span class="table-toolbar-label">Элементы</span>
+      <span class="row-count" id="row-count"></span>
+    </div>
+    <div class="table-wrap" id="table-wrap">
+      <div class="state-panel" id="loading-state">
+        <div class="spinner"></div>
+        <span>Загрузка данных…</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+// ── Config ────────────────────────────────────────────────
+// Adjust these endpoints to match your backend
+const API_GET    = '/api/elements';          // GET → [{id, tmarka_elementa, ...}, ...]
+const API_SAVE   = '/api/elements/bulk';     // PUT  body: [{id, ...}, ...]
+const API_COORD  = '/api/elements/coords';   // PATCH body: {id, pdf_page, pdf_x, pdf_y}
+const PDF_SERVE  = '/api/pdf/file';          // GET ?name=filename.pdf → PDF binary
+
+// PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ── State ─────────────────────────────────────────────────
+let allRows       = [];   // [{id, tmarka_elementa, tclass_betona, ...}, ...]
+let dirtyIds      = new Set();
+let pdfDoc        = null;
+let currentPage   = 1;
+let pdfScale      = 1.5;
+let activeRowId   = null;
+let searchQuery   = '';
+
+// ── Init ──────────────────────────────────────────────────
+(async function init() {
+  await loadTableData();
+
+  // Try to get PDF filename from URL param
+  const params   = new URLSearchParams(location.search);
+  const fileName = params.get('file');
+  if (fileName) {
+    document.getElementById('pdf-filename').textContent = fileName;
+    await loadPdfFromServer(fileName);
+  }
+})();
+
+// ── Table Data ────────────────────────────────────────────
+async function loadTableData() {
+  try {
+    const res  = await fetch(API_GET);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    allRows = await res.json();
+    renderTable(allRows);
+  } catch (err) {
+    document.getElementById('table-wrap').innerHTML =
+      `<div class="state-panel"><span style="color:var(--red)">Ошибка загрузки: ${err.message}</span></div>`;
+  }
+}
+
+// ── Render Table ──────────────────────────────────────────
+const COLS = [
+  { key: 'tmarka_elementa', label: 'Марка элемента',       editable: true  },
+  { key: 'tclass_betona',   label: 'Класс бетона',         editable: true  },
+  { key: 'tthickness',      label: 'Толщина, мм',          editable: true  },
+  { key: 'tbeton_m3',       label: 'Бетон, м³',            editable: true  },
+  { key: 'tstal_kg',        label: 'Сталь, кг',            editable: true  },
+  { key: 'tcoef_a',         label: 'Коэф. армирования',    editable: false },
+];
+
+function renderTable(rows) {
+  const wrap = document.getElementById('table-wrap');
+  if (!rows.length) {
+    wrap.innerHTML = '<div class="state-panel"><span>Нет данных</span></div>';
+    return;
+  }
+
+  let html = '<table><thead><tr>';
+  html += '<th>#</th>';
+  COLS.forEach(c => { html += `<th>${c.label}</th>`; });
+  html += '</tr></thead><tbody>';
+
+  rows.forEach((row, i) => {
+    const isDirty  = dirtyIds.has(row.id);
+    const isActive = activeRowId === row.id;
+    html += `<tr data-id="${row.id}" onclick="onRowClick(${row.id})"
+               class="${isDirty ? 'dirty' : ''} ${isActive ? 'active' : ''}">`;
+    html += `<td>${i + 1}</td>`;
+
+    COLS.forEach(col => {
+      const val  = row[col.key];
+      const disp = val === null || val === undefined ? '' : val;
+      const cls  = disp === '' ? 'cell-null' : '';
+
+      if (col.editable) {
+        html += `<td contenteditable="true"
+                     data-id="${row.id}"
+                     data-key="${col.key}"
+                     class="${cls}"
+                     oninput="onCellEdit(this,${row.id},'${col.key}')"
+                     >${disp}</td>`;
+      } else {
+        // tcoef_a — read-only, auto-calculated
+        const coef = computeCoef(row);
+        html += `<td style="color:var(--text-dim)">${coef !== null ? coef.toFixed(4) : '—'}</td>`;
+      }
+    });
+
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+
+  document.getElementById('row-count').textContent = `${rows.length} строк`;
+}
+
+function computeCoef(row) {
+  if (row.tstal_kg && row.tbeton_m3 && row.tbeton_m3 > 0)
+    return Math.round((row.tstal_kg / row.tbeton_m3) * 10000) / 10000;
+  return null;
+}
+
+// ── Cell Edit ─────────────────────────────────────────────
+function onCellEdit(el, id, key) {
+  const row = allRows.find(r => r.id === id);
+  if (!row) return;
+
+  let val = el.textContent.trim();
+
+  // Numeric columns
+  if (['tthickness','tbeton_m3','tstal_kg'].includes(key)) {
+    const num = parseFloat(val.replace(',', '.'));
+    row[key] = isNaN(num) ? null : num;
+  } else {
+    row[key] = val === '' ? null : val;
+  }
+
+  // Recompute coef
+  const coefTd = el.closest('tr').querySelector('td:last-child');
+  if (coefTd) {
+    const coef = computeCoef(row);
+    coefTd.textContent = coef !== null ? coef.toFixed(4) : '—';
+    row.tcoef_a = coef;
+  }
+
+  dirtyIds.add(id);
+  el.closest('tr').classList.add('dirty');
+  setUnsaved();
+}
+
+// ── Save ──────────────────────────────────────────────────
+function setUnsaved() {
+  const pill = document.getElementById('status-pill');
+  pill.className = 'status-pill unsaved';
+  pill.textContent = '● Несохранено';
+  document.getElementById('btn-save').disabled = false;
+}
+
+async function saveAll() {
+  if (!dirtyIds.size) return;
+
+  const pill = document.getElementById('status-pill');
+  pill.className = 'status-pill saving';
+  pill.textContent = 'Сохранение…';
+
+  const toSave = allRows.filter(r => dirtyIds.has(r.id));
+  try {
+    const res = await fetch(API_SAVE, {
+      method:  'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(toSave),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    dirtyIds.clear();
+    pill.className = 'status-pill saved';
+    pill.textContent = '✓ Сохранено';
+    document.getElementById('btn-save').disabled = true;
+
+    // Remove dirty highlight
+    document.querySelectorAll('tr.dirty').forEach(tr => tr.classList.remove('dirty'));
+
+    toast('Данные сохранены', 'ok');
+
+    // Показать кнопку "Идти дальше"
+const btnNext = document.getElementById('btn-next');
+btnNext.style.display = 'none';
+requestAnimationFrame(() => requestAnimationFrame(() => {
+  btnNext.style.display = 'inline-flex';
+}));
+
+    setTimeout(() => { pill.className = 'status-pill'; }, 3000);
+  } catch (err) {
+    pill.className = 'status-pill error';
+    pill.textContent = 'Ошибка';
+    toast(`Ошибка сохранения: ${err.message}`, 'err');
+  }
+}
+
+// ── Search ────────────────────────────────────────────────
+function filterTable(q) {
+  searchQuery = q.toLowerCase();
+  const filtered = allRows.filter(r =>
+    !searchQuery || (r.tmarka_elementa || '').toLowerCase().includes(searchQuery)
+  );
+  renderTable(filtered);
+}
+
+// ── Row Click → PDF highlight ─────────────────────────────
+// ── Row Click → PDF highlight ─────────────────────────────
+async function onRowClick(id) {
+  activeRowId = id;
+
+  // Подсветить активную строку
+  document.querySelectorAll('tbody tr').forEach(tr => {
+    tr.classList.toggle('active', parseInt(tr.dataset.id) === id);
+  });
+
+  if (!pdfDoc) return;
+
+  const row = allRows.find(r => r.id === id);
+  if (!row) return;
+
+  // ── Вариант 1: есть bbox из БД (парсинг сохранил координаты) ──
+  if (row.bbox_page != null && row.bbox_x != null && row.pdf_page_w) {
+    await highlightByBbox(row);
+    return;
+  }
+
+  // ── Вариант 2: fallback — текстовый поиск по PDF ──
+  const marker = row.tmarka_elementa;
+  if (!marker) return;
+
+  const found = await findTextInPdf(marker.trim());
+  if (!found) {
+    toast(`Текст "${marker}" не найден в PDF`, 'err');
+    return;
+  }
+
+  await renderPageWithDot(found.page, found.x, found.y);
+}
+
+// ── Перевод нормализованных bbox → пиксели canvas и показ точки ──
+async function highlightByBbox(row) {
+  const targetPage = row.bbox_page;   // номер страницы (1-based)
+
+  // Переключаем страницу если нужно
+  if (targetPage !== currentPage) {
+    currentPage = targetPage;
+    await renderPage(currentPage);
+    updatePageCtrl();
+  }
+
+  // Получаем реальные размеры отрендеренного canvas
+  const canvas   = document.getElementById('pdf-canvas');
+  const canvasW  = canvas.width;
+  const canvasH  = canvas.height;
+
+  // bbox хранится нормализованным [0..1] относительно размера изображения при DPI=300
+  // Переводим в пиксели текущего canvas
+  const dotX = row.bbox_x * canvasW + (row.bbox_w * canvasW) / 2;
+  const dotY = row.bbox_y * canvasH + (row.bbox_h * canvasH) / 2;
+
+  // Рисуем точку
+  const overlay = document.getElementById('pdf-overlay');
+  overlay.innerHTML = '';
+  const dot = document.createElement('div');
+  dot.className  = 'highlight-dot';
+  dot.style.left = dotX + 'px';
+  dot.style.top  = dotY + 'px';
+  overlay.appendChild(dot);
+
+  // Скроллим к точке
+  const viewport = document.getElementById('pdf-viewport');
+  viewport.scrollTo({
+    left:     dotX - viewport.clientWidth  / 2,
+    top:      dotY - viewport.clientHeight / 2,
+    behavior: 'smooth',
+  });
+}
+
+// ── PDF: load from server ─────────────────────────────────
+async function loadPdfFromServer(fileName) {
+  try {
+    const url = `${PDF_SERVE}?name=${encodeURIComponent(fileName)}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob       = await res.blob();
+    const arrayBuf   = await blob.arrayBuffer();
+    await initPdf(arrayBuf);
+  } catch (err) {
+    console.warn('PDF load failed:', err);
+    // Just show upload area — user can load manually
+  }
+}
+
+// ── PDF: load from file input ─────────────────────────────
+function onPdfDrop(e) {
+  e.preventDefault();
+  document.getElementById('pdf-upload-area').classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) loadPdfFile(file);
+}
+
+async function loadPdfFile(file) {
+  if (!file) return;
+  document.getElementById('pdf-filename').textContent = file.name;
+  const buf = await file.arrayBuffer();
+  await initPdf(buf);
+}
+
+async function initPdf(arrayBuf) {
+  pdfDoc = await pdfjsLib.getDocument({ data: arrayBuf }).promise;
+  currentPage = 1;
+
+  document.getElementById('pdf-upload-area').style.display = 'none';
+  document.getElementById('pdf-viewport').style.display = 'flex';
+  document.getElementById('pdf-page-ctrl').style.display = 'flex';
+
+  await renderPage(currentPage);
+  updatePageCtrl();
+}
+
+// ── PDF: render page ──────────────────────────────────────
+let _rendering = false;
+
+async function renderPage(pageNum) {
+  if (_rendering) return;
+  _rendering = true;
+  try {
+    const page     = await pdfDoc.getPage(pageNum);
+    const viewport = page.getViewport({ scale: pdfScale });
+    const canvas   = document.getElementById('pdf-canvas');
+    canvas.width   = viewport.width;
+    canvas.height  = viewport.height;
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+    document.getElementById('pdf-overlay').innerHTML = '';
+  } finally {
+    _rendering = false;
+  }
+}
+
+async function renderPageWithDot(pageNum, x, y) {
+  if (pageNum !== currentPage) {
+    currentPage = pageNum;
+    await renderPage(currentPage);
+    updatePageCtrl();
+  }
+
+  const overlay = document.getElementById('pdf-overlay');
+  overlay.innerHTML = '';
+
+  const dot    = document.createElement('div');
+  dot.className = 'highlight-dot';
+  dot.style.left = x + 'px';
+  dot.style.top  = y + 'px';
+  overlay.appendChild(dot);
+
+  // Scroll dot into view
+  const viewport = document.getElementById('pdf-viewport');
+  const canvas   = document.getElementById('pdf-canvas');
+  const wrapRect  = canvas.getBoundingClientRect();
+  viewport.scrollTo({
+    left: x - viewport.clientWidth / 2,
+    top:  y - viewport.clientHeight / 2,
+    behavior: 'smooth',
+  });
+}
+
+function changePage(delta) {
+  const newPage = currentPage + delta;
+  if (newPage < 1 || newPage > pdfDoc.numPages) return;
+  currentPage = newPage;
+  renderPage(currentPage);
+  updatePageCtrl();
+  document.getElementById('pdf-overlay').innerHTML = '';
+}
+
+function updatePageCtrl() {
+  if (!pdfDoc) return;
+  document.getElementById('page-info').textContent = `${currentPage} / ${pdfDoc.numPages}`;
+  document.getElementById('btn-prev').disabled      = currentPage <= 1;
+  document.getElementById('btn-next-page').disabled = currentPage >= pdfDoc.numPages;
+}
+
+// ── PDF: text search ──────────────────────────────────────
+async function findTextInPdf(searchText) {
+  const numPages = pdfDoc.numPages;
+  const target   = searchText.toLowerCase().replace(/\s+/g, ' ').trim();
+
+  for (let p = 1; p <= numPages; p++) {
+    const page     = await pdfDoc.getPage(p);
+    const textContent = await page.getTextContent();
+    const viewport = page.getViewport({ scale: pdfScale });
+
+    for (const item of textContent.items) {
+      const t = (item.str || '').toLowerCase().replace(/\s+/g, ' ').trim();
+      if (t.includes(target) || target.includes(t) && t.length > 3) {
+        // Convert PDF coordinates to canvas coordinates
+        const tx = item.transform[4] * pdfScale;
+        const ty = viewport.height - item.transform[5] * pdfScale;
+        return { page: p, x: tx, y: ty };
+      }
+    }
+  }
+  return null;
+}
+
+// ── Toast ─────────────────────────────────────────────────
+function toast(msg, type = 'ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `show ${type}`;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.className = ''; }, 3000);
+}
+
+// ── Keyboard shortcut: Ctrl+S ─────────────────────────────
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    e.preventDefault();
+    saveAll();
+  }
+});
+</script>
+</body>
+</html>
