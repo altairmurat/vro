@@ -7,7 +7,6 @@ router_raschet.py — FastAPI роутер для страницы raschet.html
 """
 
 import os
-import tempfile
 from pathlib import Path
 from typing import Optional
 
@@ -19,9 +18,6 @@ from sqlalchemy import text
 from env import DATABASE_URL
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-
-# router_raschet.py — вверху файла убрать tempfile, добавить параметр
-import os
 
 # Папка загрузок — устанавливается из main.py при подключении роутера
 UPLOAD_DIR: str = ""
@@ -73,10 +69,6 @@ class CoordsIn(BaseModel):
 
 # ── Migration helper: add PDF coordinate columns if missing ──
 def ensure_pdf_columns():
-    """
-    Добавляет колонки pdf_page / pdf_x / pdf_y в таблицу elements,
-    если их ещё нет. Вызывается при старте приложения.
-    """
     with engine.connect() as conn:
         existing = [
             row[0]
@@ -111,7 +103,7 @@ def get_elements():
             text("""
                 SELECT id, tmarka_elementa, tclass_betona, tthickness,
                        tbeton_m3, tstal_kg, tcoef_a,
-                       pdf_page, pdf_x, pdf_y, bbox_x, bbox_y, bbox_w, bbox_h, pdf_page_w, pdf_page_h
+                       pdf_page, pdf_x, pdf_y
                 FROM elements
                 ORDER BY id
             """)
@@ -123,11 +115,6 @@ def get_elements():
 # ── PUT /api/elements/bulk ────────────────────────────────
 @router.put("/elements/bulk")
 def update_elements(items: list[ElementIn]):
-    """
-    Принять массив изменённых строк и обновить в БД.
-    Обновляются только поля tmarka_elementa, tclass_betona,
-    tthickness, tbeton_m3, tstal_kg, tcoef_a.
-    """
     if not items:
         return {"updated": 0}
 
@@ -164,10 +151,6 @@ def update_elements(items: list[ElementIn]):
 # ── PATCH /api/elements/coords ────────────────────────────
 @router.patch("/elements/coords")
 def save_coords(data: CoordsIn):
-    """
-    Сохранить PDF-координаты для одной строки.
-    Вызывается автоматически после первого клика по строке в таблице.
-    """
     with SessionLocal() as db:
         result = db.execute(
             text("""
@@ -200,7 +183,6 @@ def serve_pdf(name: str):
     if not file_path.exists():
         raise HTTPException(status_code=404, detail=f"File '{safe_name}' not found")
 
-    # RFC 5987 — кириллица в заголовке через UTF-8 encoding
     from urllib.parse import quote
     encoded_name = quote(safe_name, encoding='utf-8')
 

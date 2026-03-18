@@ -549,30 +549,27 @@ td[contenteditable="true"]:focus {
 
 <script>
 // ── Config ────────────────────────────────────────────────
-// Adjust these endpoints to match your backend
-const API_GET    = '/api/elements';          // GET → [{id, tmarka_elementa, ...}, ...]
-const API_SAVE   = '/api/elements/bulk';     // PUT  body: [{id, ...}, ...]
-const API_COORD  = '/api/elements/coords';   // PATCH body: {id, pdf_page, pdf_x, pdf_y}
-const PDF_SERVE  = '/api/pdf/file';          // GET ?name=filename.pdf → PDF binary
+const API_GET   = '/api/elements';      // GET → [{id, tmarka_elementa, ...}, ...]
+const API_SAVE  = '/api/elements/bulk'; // PUT  body: [{id, ...}, ...]
+const PDF_SERVE = '/api/pdf/file';      // GET ?name=filename.pdf → PDF binary
 
 // PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc =
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
 // ── State ─────────────────────────────────────────────────
-let allRows       = [];   // [{id, tmarka_elementa, tclass_betona, ...}, ...]
-let dirtyIds      = new Set();
-let pdfDoc        = null;
-let currentPage   = 1;
-let pdfScale      = 1.5;
-let activeRowId   = null;
-let searchQuery   = '';
+let allRows     = [];
+let dirtyIds    = new Set();
+let pdfDoc      = null;
+let currentPage = 1;
+let pdfScale    = 1.5;
+let activeRowId = null;
+let searchQuery = '';
 
 // ── Init ──────────────────────────────────────────────────
 (async function init() {
   await loadTableData();
 
-  // Try to get PDF filename from URL param
   const params   = new URLSearchParams(location.search);
   const fileName = params.get('file');
   if (fileName) {
@@ -584,7 +581,7 @@ let searchQuery   = '';
 // ── Table Data ────────────────────────────────────────────
 async function loadTableData() {
   try {
-    const res  = await fetch(API_GET);
+    const res = await fetch(API_GET);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     allRows = await res.json();
     renderTable(allRows);
@@ -596,12 +593,12 @@ async function loadTableData() {
 
 // ── Render Table ──────────────────────────────────────────
 const COLS = [
-  { key: 'tmarka_elementa', label: 'Марка элемента',       editable: true  },
-  { key: 'tclass_betona',   label: 'Класс бетона',         editable: true  },
-  { key: 'tthickness',      label: 'Толщина, мм',          editable: true  },
-  { key: 'tbeton_m3',       label: 'Бетон, м³',            editable: true  },
-  { key: 'tstal_kg',        label: 'Сталь, кг',            editable: true  },
-  { key: 'tcoef_a',         label: 'Коэф. армирования',    editable: false },
+  { key: 'tmarka_elementa', label: 'Марка элемента',    editable: true  },
+  { key: 'tclass_betona',   label: 'Класс бетона',      editable: true  },
+  { key: 'tthickness',      label: 'Толщина, мм',       editable: true  },
+  { key: 'tbeton_m3',       label: 'Бетон, м³',         editable: true  },
+  { key: 'tstal_kg',        label: 'Сталь, кг',         editable: true  },
+  { key: 'tcoef_a',         label: 'Коэф. армирования', editable: false },
 ];
 
 function renderTable(rows) {
@@ -636,7 +633,6 @@ function renderTable(rows) {
                      oninput="onCellEdit(this,${row.id},'${col.key}')"
                      >${disp}</td>`;
       } else {
-        // tcoef_a — read-only, auto-calculated
         const coef = computeCoef(row);
         html += `<td style="color:var(--text-dim)">${coef !== null ? coef.toFixed(4) : '—'}</td>`;
       }
@@ -664,7 +660,6 @@ function onCellEdit(el, id, key) {
 
   let val = el.textContent.trim();
 
-  // Numeric columns
   if (['tthickness','tbeton_m3','tstal_kg'].includes(key)) {
     const num = parseFloat(val.replace(',', '.'));
     row[key] = isNaN(num) ? null : num;
@@ -672,7 +667,6 @@ function onCellEdit(el, id, key) {
     row[key] = val === '' ? null : val;
   }
 
-  // Recompute coef
   const coefTd = el.closest('tr').querySelector('td:last-child');
   if (coefTd) {
     const coef = computeCoef(row);
@@ -714,17 +708,14 @@ async function saveAll() {
     pill.textContent = '✓ Сохранено';
     document.getElementById('btn-save').disabled = true;
 
-    // Remove dirty highlight
     document.querySelectorAll('tr.dirty').forEach(tr => tr.classList.remove('dirty'));
-
     toast('Данные сохранены', 'ok');
 
-    // Показать кнопку "Идти дальше"
-const btnNext = document.getElementById('btn-next');
-btnNext.style.display = 'none';
-requestAnimationFrame(() => requestAnimationFrame(() => {
-  btnNext.style.display = 'inline-flex';
-}));
+    const btnNext = document.getElementById('btn-next');
+    btnNext.style.display = 'none';
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      btnNext.style.display = 'inline-flex';
+    }));
 
     setTimeout(() => { pill.className = 'status-pill'; }, 3000);
   } catch (err) {
@@ -744,11 +735,9 @@ function filterTable(q) {
 }
 
 // ── Row Click → PDF highlight ─────────────────────────────
-// ── Row Click → PDF highlight ─────────────────────────────
 async function onRowClick(id) {
   activeRowId = id;
 
-  // Подсветить активную строку
   document.querySelectorAll('tbody tr').forEach(tr => {
     tr.classList.toggle('active', parseInt(tr.dataset.id) === id);
   });
@@ -758,13 +747,6 @@ async function onRowClick(id) {
   const row = allRows.find(r => r.id === id);
   if (!row) return;
 
-  // ── Вариант 1: есть bbox из БД (парсинг сохранил координаты) ──
-  if (row.bbox_page != null && row.bbox_x != null && row.pdf_page_w) {
-    await highlightByBbox(row);
-    return;
-  }
-
-  // ── Вариант 2: fallback — текстовый поиск по PDF ──
   const marker = row.tmarka_elementa;
   if (!marker) return;
 
@@ -777,57 +759,17 @@ async function onRowClick(id) {
   await renderPageWithDot(found.page, found.x, found.y);
 }
 
-// ── Перевод нормализованных bbox → пиксели canvas и показ точки ──
-async function highlightByBbox(row) {
-  const targetPage = row.bbox_page;   // номер страницы (1-based)
-
-  // Переключаем страницу если нужно
-  if (targetPage !== currentPage) {
-    currentPage = targetPage;
-    await renderPage(currentPage);
-    updatePageCtrl();
-  }
-
-  // Получаем реальные размеры отрендеренного canvas
-  const canvas   = document.getElementById('pdf-canvas');
-  const canvasW  = canvas.width;
-  const canvasH  = canvas.height;
-
-  // bbox хранится нормализованным [0..1] относительно размера изображения при DPI=300
-  // Переводим в пиксели текущего canvas
-  const dotX = row.bbox_x * canvasW + (row.bbox_w * canvasW) / 2;
-  const dotY = row.bbox_y * canvasH + (row.bbox_h * canvasH) / 2;
-
-  // Рисуем точку
-  const overlay = document.getElementById('pdf-overlay');
-  overlay.innerHTML = '';
-  const dot = document.createElement('div');
-  dot.className  = 'highlight-dot';
-  dot.style.left = dotX + 'px';
-  dot.style.top  = dotY + 'px';
-  overlay.appendChild(dot);
-
-  // Скроллим к точке
-  const viewport = document.getElementById('pdf-viewport');
-  viewport.scrollTo({
-    left:     dotX - viewport.clientWidth  / 2,
-    top:      dotY - viewport.clientHeight / 2,
-    behavior: 'smooth',
-  });
-}
-
 // ── PDF: load from server ─────────────────────────────────
 async function loadPdfFromServer(fileName) {
   try {
     const url = `${PDF_SERVE}?name=${encodeURIComponent(fileName)}`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const blob       = await res.blob();
-    const arrayBuf   = await blob.arrayBuffer();
+    const blob     = await res.blob();
+    const arrayBuf = await blob.arrayBuffer();
     await initPdf(arrayBuf);
   } catch (err) {
     console.warn('PDF load failed:', err);
-    // Just show upload area — user can load manually
   }
 }
 
@@ -887,18 +829,15 @@ async function renderPageWithDot(pageNum, x, y) {
   const overlay = document.getElementById('pdf-overlay');
   overlay.innerHTML = '';
 
-  const dot    = document.createElement('div');
-  dot.className = 'highlight-dot';
+  const dot = document.createElement('div');
+  dot.className  = 'highlight-dot';
   dot.style.left = x + 'px';
   dot.style.top  = y + 'px';
   overlay.appendChild(dot);
 
-  // Scroll dot into view
   const viewport = document.getElementById('pdf-viewport');
-  const canvas   = document.getElementById('pdf-canvas');
-  const wrapRect  = canvas.getBoundingClientRect();
   viewport.scrollTo({
-    left: x - viewport.clientWidth / 2,
+    left: x - viewport.clientWidth  / 2,
     top:  y - viewport.clientHeight / 2,
     behavior: 'smooth',
   });
@@ -915,9 +854,9 @@ function changePage(delta) {
 
 function updatePageCtrl() {
   if (!pdfDoc) return;
-  document.getElementById('page-info').textContent = `${currentPage} / ${pdfDoc.numPages}`;
-  document.getElementById('btn-prev').disabled      = currentPage <= 1;
-  document.getElementById('btn-next-page').disabled = currentPage >= pdfDoc.numPages;
+  document.getElementById('page-info').textContent   = `${currentPage} / ${pdfDoc.numPages}`;
+  document.getElementById('btn-prev').disabled        = currentPage <= 1;
+  document.getElementById('btn-next-page').disabled   = currentPage >= pdfDoc.numPages;
 }
 
 // ── PDF: text search ──────────────────────────────────────
@@ -926,14 +865,13 @@ async function findTextInPdf(searchText) {
   const target   = searchText.toLowerCase().replace(/\s+/g, ' ').trim();
 
   for (let p = 1; p <= numPages; p++) {
-    const page     = await pdfDoc.getPage(p);
+    const page        = await pdfDoc.getPage(p);
     const textContent = await page.getTextContent();
-    const viewport = page.getViewport({ scale: pdfScale });
+    const viewport    = page.getViewport({ scale: pdfScale });
 
     for (const item of textContent.items) {
       const t = (item.str || '').toLowerCase().replace(/\s+/g, ' ').trim();
       if (t.includes(target) || target.includes(t) && t.length > 3) {
-        // Convert PDF coordinates to canvas coordinates
         const tx = item.transform[4] * pdfScale;
         const ty = viewport.height - item.transform[5] * pdfScale;
         return { page: p, x: tx, y: ty };
