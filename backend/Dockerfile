@@ -1,6 +1,5 @@
 FROM python:3.10-slim
 
-# Системные зависимости — tesseract + poppler
 RUN apt-get update && apt-get install -y \
     tesseract-ocr \
     tesseract-ocr-rus \
