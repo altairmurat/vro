@@ -726,7 +726,7 @@ def save_upload(upload: UploadFile) -> str:
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    with open("../frontend/index.html", encoding="utf-8") as f:
+    with open("frontend/index.html", encoding="utf-8") as f:
         return HTMLResponse(content=f.read())
 
 
